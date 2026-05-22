@@ -1,6 +1,87 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 
+// Up to 8 groups — background and foreground colors
+const GROUP_BG = ['#3b82f6','#22c55e','#f97316','#a855f7','#ec4899','#ef4444','#14b8a6','#6366f1'];
+const GROUP_FG = ['#fff','#fff','#fff','#fff','#fff','#fff','#fff','#fff'];
+
+function ConfigurarTorneio() {
+  const { state, dispatch } = useStore();
+  const { config, duplas } = state;
+
+  const duplasPorGrupo = config.numGrupos > 0
+    ? Math.ceil(duplas.length / config.numGrupos)
+    : 0;
+  const totalPartidas = config.numGrupos * Math.max(0, duplasPorGrupo * (duplasPorGrupo - 1) / 2);
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
+      <h2 className="text-lg font-semibold text-gray-700 mb-4">Configurar Torneio</h2>
+
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tipo de Duplas</p>
+        <div className="flex gap-2">
+          {[
+            { key: 'masculino', label: '👨 Masculino' },
+            { key: 'feminino',  label: '👩 Feminino'  },
+            { key: 'misto',     label: '👫 Misto'      },
+          ].map(({ key, label }) => (
+            <button key={key} type="button"
+              onClick={() => dispatch({ type: 'SET_CONFIG', config: { tipo: key } })}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors border-2 ${
+                config.tipo === key
+                  ? 'bg-blue-500 border-blue-500 text-white'
+                  : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Número de Grupos</p>
+        <div className="flex gap-2">
+          {[2, 4, 8].map(n => (
+            <button key={n} type="button"
+              onClick={() => dispatch({ type: 'SET_CONFIG', config: { numGrupos: n } })}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors border-2 ${
+                config.numGrupos === n
+                  ? 'bg-orange-400 border-orange-400 text-white'
+                  : 'bg-white border-gray-200 text-gray-500 hover:border-orange-300'
+              }`}>
+              {n} grupos
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button type="button"
+        onClick={() => dispatch({ type: 'SET_CONFIG', config: { terceirolugar: !config.terceirolugar } })}
+        className="flex items-center gap-2 text-sm font-medium w-full">
+        <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+          config.terceirolugar ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+        }`}>
+          {config.terceirolugar && <span className="text-white text-xs font-bold">✓</span>}
+        </span>
+        <span className={config.terceirolugar ? 'text-blue-600' : 'text-gray-400'}>
+          Disputa de 3º lugar
+        </span>
+      </button>
+
+      {duplas.length > 0 && (
+        <div className="mt-4 bg-orange-50 rounded-xl px-4 py-3 text-xs text-orange-700">
+          <span className="font-semibold">{duplas.length} duplas</span>
+          {' · '}
+          <span>{config.numGrupos} grupos de ~{duplasPorGrupo} duplas</span>
+          {' · '}
+          <span>~{totalPartidas} jogos na fase de grupos</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Patrocinadores() {
   const { state, dispatch } = useStore();
   const [nome, setNome] = useState('');
@@ -17,11 +98,8 @@ function Patrocinadores() {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
-      <button
-        type="button"
-        onClick={() => setAberto(v => !v)}
-        className="w-full flex items-center justify-between"
-      >
+      <button type="button" onClick={() => setAberto(v => !v)}
+        className="w-full flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-700">
           Patrocinadores
           {state.patrocinadores.length > 0 && (
@@ -68,79 +146,97 @@ function Patrocinadores() {
 
 function CriadorDuplas() {
   const { state, dispatch } = useStore();
-  const [homemSel, setHomemSel] = useState(null);
-  const [mulherSel, setMulherSel] = useState(null);
+  const [sel1, setSel1] = useState(null);
+  const [sel2, setSel2] = useState(null);
 
-  // Players already assigned to a pair
+  const { tipo } = state.config;
   const emDupla = new Set(state.duplas.flatMap(d => d.jogadores.map(j => j.id)));
 
-  const homensLivres = state.jogadores.filter(j => j.genero === 'M' && !emDupla.has(j.id));
-  const mulheresLivres = state.jogadores.filter(j => j.genero === 'F' && !emDupla.has(j.id));
+  let col1, col2, label1, label2, cor1, cor2;
 
-  function confirmarDupla() {
-    if (!homemSel || !mulherSel) return;
-    dispatch({ type: 'CRIAR_DUPLA', homemId: homemSel, mulherId: mulherSel });
-    setHomemSel(null);
-    setMulherSel(null);
+  if (tipo === 'misto') {
+    col1 = state.jogadores.filter(j => j.genero === 'M' && !emDupla.has(j.id));
+    col2 = state.jogadores.filter(j => j.genero === 'F' && !emDupla.has(j.id));
+    label1 = '👨 Homens';
+    label2 = '👩 Mulheres';
+    cor1 = 'blue';
+    cor2 = 'pink';
+  } else {
+    const g = tipo === 'masculino' ? 'M' : 'F';
+    const todos = state.jogadores.filter(j => j.genero === g && !emDupla.has(j.id));
+    col1 = todos.filter(j => j.id !== sel2);
+    col2 = todos.filter(j => j.id !== sel1);
+    label1 = tipo === 'masculino' ? '👨 Jogador 1' : '👩 Jogadora 1';
+    label2 = tipo === 'masculino' ? '👨 Jogador 2' : '👩 Jogadora 2';
+    cor1 = tipo === 'masculino' ? 'blue' : 'pink';
+    cor2 = tipo === 'masculino' ? 'blue' : 'pink';
   }
 
-  if (homensLivres.length === 0 && mulheresLivres.length === 0) return null;
+  const temDisponiveis = col1.length > 0 || col2.length > 0 || sel1 || sel2;
+  if (!temDisponiveis) return null;
+
+  function confirmarDupla() {
+    if (!sel1 || !sel2) return;
+    dispatch({ type: 'CRIAR_DUPLA', jogador1Id: sel1, jogador2Id: sel2 });
+    setSel1(null);
+    setSel2(null);
+  }
+
+  function BtnJogador({ jogador, selecionado, onClick, cor }) {
+    const sel = cor === 'blue'
+      ? 'bg-blue-500 border-blue-500 text-white shadow-md'
+      : 'bg-pink-500 border-pink-500 text-white shadow-md';
+    const normal = cor === 'blue'
+      ? 'bg-blue-50 border-transparent text-blue-800 hover:border-blue-300'
+      : 'bg-pink-50 border-transparent text-pink-800 hover:border-pink-300';
+    return (
+      <button type="button" onClick={onClick}
+        className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all border-2 ${selecionado ? sel : normal}`}>
+        {jogador.nome}
+      </button>
+    );
+  }
+
+  const nome1 = sel1 ? state.jogadores.find(j => j.id === sel1)?.nome : null;
+  const nome2 = sel2 ? state.jogadores.find(j => j.id === sel2)?.nome : null;
+  const hint1 = label1.split(' ').slice(1).join(' ') || 'jogador';
+  const hint2 = label2.split(' ').slice(1).join(' ') || 'jogador';
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
       <h2 className="text-lg font-semibold text-gray-700 mb-4">Montar Duplas</h2>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        {/* Homens */}
         <div>
-          <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-2 flex items-center gap-1">
-            👨 Homens
+          <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${cor1 === 'blue' ? 'text-blue-500' : 'text-pink-500'}`}>
+            {label1}
           </p>
-          {homensLivres.length === 0 ? (
+          {col1.length === 0 ? (
             <p className="text-xs text-gray-400 italic">Todos na dupla</p>
           ) : (
             <ul className="space-y-1.5">
-              {homensLivres.map(j => (
+              {col1.map(j => (
                 <li key={j.id}>
-                  <button
-                    type="button"
-                    onClick={() => setHomemSel(homemSel === j.id ? null : j.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all border-2 ${
-                      homemSel === j.id
-                        ? 'bg-blue-500 border-blue-500 text-white shadow-md'
-                        : 'bg-blue-50 border-transparent text-blue-800 hover:border-blue-300'
-                    }`}
-                  >
-                    {j.nome}
-                  </button>
+                  <BtnJogador jogador={j} selecionado={sel1 === j.id}
+                    onClick={() => setSel1(sel1 === j.id ? null : j.id)} cor={cor1} />
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        {/* Mulheres */}
         <div>
-          <p className="text-xs font-semibold text-pink-500 uppercase tracking-wide mb-2 flex items-center gap-1">
-            👩 Mulheres
+          <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${cor2 === 'blue' ? 'text-blue-500' : 'text-pink-500'}`}>
+            {label2}
           </p>
-          {mulheresLivres.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">Todas na dupla</p>
+          {col2.length === 0 ? (
+            <p className="text-xs text-gray-400 italic">Todos na dupla</p>
           ) : (
             <ul className="space-y-1.5">
-              {mulheresLivres.map(j => (
+              {col2.map(j => (
                 <li key={j.id}>
-                  <button
-                    type="button"
-                    onClick={() => setMulherSel(mulherSel === j.id ? null : j.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all border-2 ${
-                      mulherSel === j.id
-                        ? 'bg-pink-500 border-pink-500 text-white shadow-md'
-                        : 'bg-pink-50 border-transparent text-pink-800 hover:border-pink-300'
-                    }`}
-                  >
-                    {j.nome}
-                  </button>
+                  <BtnJogador jogador={j} selecionado={sel2 === j.id}
+                    onClick={() => setSel2(sel2 === j.id ? null : j.id)} cor={cor2} />
                 </li>
               ))}
             </ul>
@@ -148,31 +244,23 @@ function CriadorDuplas() {
         </div>
       </div>
 
-      {/* Preview + confirm */}
-      {(homemSel || mulherSel) && (
+      {(sel1 || sel2) && (
         <div className="bg-gradient-to-r from-blue-50 to-pink-50 rounded-xl p-3 mb-3 border border-blue-100">
           <p className="text-xs text-gray-500 mb-1 font-medium">Dupla selecionada:</p>
           <p className="text-gray-800 font-semibold text-sm">
-            {homemSel
-              ? homensLivres.find(j => j.id === homemSel)?.nome
-              : <span className="text-gray-400 italic">selecione um homem</span>}
+            {nome1 ?? <span className="text-gray-400 italic">selecione {hint1}</span>}
             {' '}&{' '}
-            {mulherSel
-              ? mulheresLivres.find(j => j.id === mulherSel)?.nome
-              : <span className="text-gray-400 italic">selecione uma mulher</span>}
+            {nome2 ?? <span className="text-gray-400 italic">selecione {hint2}</span>}
           </p>
         </div>
       )}
 
-      <button
-        onClick={confirmarDupla}
-        disabled={!homemSel || !mulherSel}
+      <button onClick={confirmarDupla} disabled={!sel1 || !sel2}
         className={`w-full font-bold py-3 rounded-xl transition-all text-sm ${
-          homemSel && mulherSel
+          sel1 && sel2
             ? 'bg-gradient-to-r from-blue-500 to-pink-500 text-white shadow-md hover:opacity-90'
             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-        }`}
-      >
+        }`}>
         Confirmar Dupla
       </button>
     </div>
@@ -201,13 +289,13 @@ export default function Registration({ onLogout }) {
   const homens = state.jogadores.filter(j => j.genero === 'M');
   const mulheres = state.jogadores.filter(j => j.genero === 'F');
   const emDupla = new Set(state.duplas.flatMap(d => d.jogadores.map(j => j.id)));
-  const podeIniciar = state.duplas.length >= 2;
+  const minDuplas = state.config.numGrupos * 2;
+  const podeIniciar = state.duplas.length >= minDuplas;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-400 via-blue-500 to-cyan-400 p-4">
       <div className="max-w-lg mx-auto">
 
-        {/* Header */}
         <div className="flex items-center justify-between pt-4 mb-6">
           <div className="text-center flex-1">
             <img src="/Logo.png" alt="Fun Raiz" className="h-12 w-12 object-contain rounded-full shadow mx-auto mb-1" />
@@ -217,10 +305,9 @@ export default function Registration({ onLogout }) {
           <button onClick={onLogout} className="text-white/70 hover:text-white text-sm transition-colors">Sair</button>
         </div>
 
-        {/* Patrocinadores */}
+        <ConfigurarTorneio />
         <Patrocinadores />
 
-        {/* Add player */}
         <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
           <h2 className="text-lg font-semibold text-gray-700 mb-3">Inscrever Jogador</h2>
           <form onSubmit={addJogador} className="space-y-3">
@@ -254,7 +341,6 @@ export default function Registration({ onLogout }) {
           {erro && <p className="text-red-500 text-sm mt-2">{erro}</p>}
         </div>
 
-        {/* Player list */}
         {state.jogadores.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
             <div className="flex items-center justify-between mb-3">
@@ -289,49 +375,102 @@ export default function Registration({ onLogout }) {
           </div>
         )}
 
-        {/* Pair builder */}
         {state.jogadores.length >= 2 && <CriadorDuplas />}
 
-        {/* Pairs list */}
         {state.duplas.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
-            <h2 className="text-lg font-semibold text-gray-700 mb-3">
-              Duplas <span className="text-blue-500 font-bold">{state.duplas.length}</span>
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-gray-700">
+                Duplas <span className="text-blue-500 font-bold">{state.duplas.length}</span>
+              </h2>
+              {/* Per-group count summary */}
+              <div className="flex gap-1">
+                {Array.from({ length: state.config.numGrupos }, (_, gi) => {
+                  const count = state.duplas.filter(d => (state.preAssign || {})[d.id] === gi).length;
+                  return (
+                    <span key={gi} className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
+                      style={{ background: GROUP_BG[gi], color: GROUP_FG[gi] }}>
+                      {String.fromCharCode(65 + gi)}{count > 0 ? `:${count}` : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
             <ul className="space-y-2">
-              {state.duplas.map((dupla, i) => (
-                <li key={dupla.id} className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-pink-50 rounded-xl px-4 py-3 border border-blue-100">
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Dupla {i + 1}</span>
-                    <p className="text-gray-800 font-medium mt-0.5">
-                      {dupla.jogadores.map(j => j.nome).join(' & ')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => dispatch({ type: 'REMOVER_DUPLA', id: dupla.id })}
-                    className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none ml-3"
-                  >×</button>
-                </li>
-              ))}
+              {state.duplas.map((dupla, i) => {
+                const grupoAtual = (state.preAssign || {})[dupla.id];
+                return (
+                  <li key={dupla.id} className="bg-gradient-to-r from-blue-50 to-pink-50 rounded-xl px-3 py-2.5 border border-blue-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Dupla {i + 1}</span>
+                        <p className="text-gray-800 font-medium text-sm truncate">
+                          {dupla.jogadores.map(j => j.nome).join(' & ')}
+                        </p>
+                      </div>
+                      {/* Group selector */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {Array.from({ length: state.config.numGrupos }, (_, gi) => (
+                          <button key={gi} type="button"
+                            onClick={() => dispatch({
+                              type: 'SET_PRE_ASSIGN',
+                              duplaId: dupla.id,
+                              grupoIndex: grupoAtual === gi ? null : gi,
+                            })}
+                            className="w-7 h-7 rounded-lg text-xs font-bold transition-all border-2"
+                            style={grupoAtual === gi
+                              ? { background: GROUP_BG[gi], color: GROUP_FG[gi], borderColor: GROUP_BG[gi] }
+                              : { background: 'white', color: '#9ca3af', borderColor: '#e5e7eb' }
+                            }>
+                            {String.fromCharCode(65 + gi)}
+                          </button>
+                        ))}
+                        <button onClick={() => dispatch({ type: 'REMOVER_DUPLA', id: dupla.id })}
+                          className="text-gray-300 hover:text-red-500 transition-colors text-xl leading-none ml-1">×</button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+            {/* Assignment status hint */}
+            {(() => {
+              const assigned = state.duplas.filter(d => {
+                const gi = (state.preAssign || {})[d.id];
+                return gi !== undefined && gi >= 0 && gi < state.config.numGrupos;
+              }).length;
+              const total = state.duplas.length;
+              if (total === 0) return null;
+              if (assigned === total) return (
+                <p className="text-xs text-green-600 mt-3 font-medium">✓ Todos os grupos definidos — distribuição manual será usada</p>
+              );
+              if (assigned === 0) return (
+                <p className="text-xs text-gray-400 mt-3">Clique nas letras para definir o grupo de cada dupla (opcional)</p>
+              );
+              return (
+                <p className="text-xs text-orange-500 mt-3">{assigned}/{total} duplas com grupo definido — distribuição aleatória para as restantes</p>
+              );
+            })()}
           </div>
         )}
 
-        {/* Actions */}
         <div className="space-y-3 pb-8">
-          {podeIniciar && (
+          {podeIniciar ? (
             <button
-              onClick={() => dispatch({ type: 'INICIAR_TORNEIO' })}
-              className="w-full bg-gradient-to-r from-orange-400 to-pink-500 text-white font-bold py-3.5 rounded-2xl shadow-lg hover:opacity-90 transition-opacity"
-            >
-              Iniciar Campeonato →
+              onClick={() => dispatch({ type: 'INICIAR_GRUPOS' })}
+              className="w-full bg-gradient-to-r from-orange-400 to-pink-500 text-white font-bold py-3.5 rounded-2xl shadow-lg hover:opacity-90 transition-opacity">
+              Iniciar Fase de Grupos →
             </button>
+          ) : state.duplas.length > 0 && (
+            <div className="bg-white/20 rounded-2xl py-3 px-4 text-white/80 text-sm text-center">
+              Mínimo {minDuplas} duplas para {state.config.numGrupos} grupos
+              ({state.duplas.length}/{minDuplas})
+            </div>
           )}
           {state.jogadores.length > 0 && (
             <button
               onClick={() => { if (confirm('Resetar jogadores e partidas?')) dispatch({ type: 'RESETAR' }); }}
-              className="w-full bg-white/30 text-white font-medium py-2.5 rounded-2xl hover:bg-white/40 transition-colors text-sm"
-            >
+              className="w-full bg-white/30 text-white font-medium py-2.5 rounded-2xl hover:bg-white/40 transition-colors text-sm">
               Resetar
             </button>
           )}
