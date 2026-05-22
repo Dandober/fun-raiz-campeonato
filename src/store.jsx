@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useState } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useRef } from 'react';
 import { supabase, TABLE, ROW_ID } from './supabase';
 
 export const initialState = {
@@ -110,6 +110,8 @@ const StoreContext = createContext(null);
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [ready, setReady] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const skipNextSave = useRef(true); // skip first save (right after load)
 
   // Load initial state from Supabase
   useEffect(() => {
@@ -119,6 +121,7 @@ export function StoreProvider({ children }) {
       .eq('id', ROW_ID)
       .single()
       .then(({ data, error }) => {
+        if (error) console.error('Supabase load error:', error);
         if (!error && data?.dados) {
           dispatch({ type: '_SET_STATE', state: { ...initialState, ...data.dados } });
         }
@@ -129,9 +132,25 @@ export function StoreProvider({ children }) {
   // Save to Supabase whenever state changes (after initial load)
   useEffect(() => {
     if (!ready) return;
+
+    // Skip the automatic save triggered right when ready becomes true
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+
     supabase
       .from(TABLE)
-      .upsert({ id: ROW_ID, dados: state, updated_at: new Date().toISOString() });
+      .update({ dados: state })
+      .eq('id', ROW_ID)
+      .then(({ error }) => {
+        if (error) {
+          console.error('Supabase save error:', error);
+          setSaveError(`Erro ao salvar: ${error.message}`);
+        } else {
+          setSaveError('');
+        }
+      });
   }, [state, ready]);
 
   if (!ready) {
@@ -144,6 +163,11 @@ export function StoreProvider({ children }) {
 
   return (
     <StoreContext.Provider value={{ state, dispatch }}>
+      {saveError && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-red-500 text-white text-sm text-center py-2 px-4">
+          ⚠️ {saveError}
+        </div>
+      )}
       {children}
     </StoreContext.Provider>
   );
