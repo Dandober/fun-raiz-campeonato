@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const CREDENCIAIS_ADMIN = { usuario: 'admin', senha: 'funraiz' };
+const CREDENCIAIS_ADMIN = { usuario: 'admin', senha: 'FunRaiz2026' };
 
 export default function Login({ onLogin }) {
   const [aba, setAba] = useState('atleta'); // 'admin' | 'atleta'
